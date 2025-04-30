@@ -162,8 +162,8 @@ def assemble_program(lines):
 if __name__ == "__main__":
     import sys
 
-    input_file = "FizzBuzz.txt"
-    output_file = "FizzBuzz.bin"
+    input_file = "FizzBuzzCompiledRun1.txt"
+    output_file = "FizzBuzzAssembledRun1.bin"
 
     with open(input_file, "r") as f:
         lines = f.readlines()
