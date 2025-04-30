@@ -1,0 +1,45 @@
+ADDI $r1, $r0, 1        # i = 1
+ADDI $r9, $r0, 15       # $r9 = 15
+
+LOOP:
+    ADDI $r2, $r0, 3
+    MOD $r3, $r1, $r2
+    BEQ $r3, $r0, PRINT_FIZZ
+
+    ADDI $r2, $r0, 5
+    MOD $r3, $r1, $r2
+    BEQ $r3, $r0, PRINT_BUZZ
+
+    ADDI $r2, $r0, 3
+    MOD $r4, $r1, $r2
+    ADDI $r2, $r0, 5
+    MOD $r5, $r1, $r2
+    BEQ $r4, $r0, CHECK_BUZZ
+    JUMP CONTINUE
+
+CHECK_BUZZ:
+    BEQ $r5, $r0, PRINT_FIZZBUZZ
+    JUMP CONTINUE
+
+PRINT_FIZZBUZZ:
+    ADDI $r6, $r0, 100    
+    PANIC $r6
+    JUMP NEXT
+
+PRINT_FIZZ:
+    ADDI $r6, $r0, 101   
+    PANIC $r6
+    JUMP NEXT
+
+PRINT_BUZZ:
+    ADDI $r6, $r0, 102    
+    PANIC $r6
+    JUMP NEXT
+
+NEXT:
+    ADDI $r1, $r1, 1     
+    BNE  $r1, $r9, LOOP
+
+CONTINUE:
+    # End of program
+    CRASH
