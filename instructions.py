@@ -20,6 +20,7 @@ INSTRUCTIONS = {
     "BNE":     {"type": "I", "opcode": "000101"},
     "LW":      {"type": "I", "opcode": "100011"},
     "SW":      {"type": "I", "opcode": "101011"},
+    "BLT":     {"type": "I", "opcode": "000110"},  
     
     "404":     {"type": "I", "opcode": "010001"},  # Branch if R2 == -1
     "GLITCH":  {"type": "I", "opcode": "011001"},  # Randomly swap R1 and R2

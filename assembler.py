@@ -141,7 +141,7 @@ def assemble_program(lines):
             instr_name = parts[0].upper()
 
             # Replace label operands for I-type branches
-            if instr_name in ["BEQ", "BNE", "404"] and parts[-1] in labels:
+            if instr_name in ["BEQ", "BNE", "BLT", "404"] and len(parts) > 1 and parts[-1] in labels:
                 label = parts[-1]
                 offset = labels[label] - (idx + 1)
                 parts[-1] = str(offset)
@@ -162,8 +162,8 @@ def assemble_program(lines):
 if __name__ == "__main__":
     import sys
 
-    input_file = "FizzBuzzCompiledRun1.txt"
-    output_file = "FizzBuzzAssembledRun1.bin"
+    input_file = "output.asm"
+    output_file = "output.bin"
 
     with open(input_file, "r") as f:
         lines = f.readlines()

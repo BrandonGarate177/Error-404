@@ -218,17 +218,14 @@ def identify_and_inject_labels(binary_lines):
     return output
 
 
-
-
-
 if __name__ == "__main__":
-    with open("FizzBuzzAssembledRun1.bin", "r") as f:
+    with open("output.bin", "r") as f:
         binary_lines = f.readlines()
 
     labeled_output = identify_and_inject_labels(binary_lines)
 
-    with open("FizzBuzz_disassembledRun1.asm", "w") as f:
+    with open("output_disassembled.asm", "w") as f:
         for line in labeled_output:
             f.write(line + "\n")
 
-    print("Disassembled with labels toFizzBuzz_disassembledRun1.asm")
+    print("Disassembled with labels output_dissambled.asm")
