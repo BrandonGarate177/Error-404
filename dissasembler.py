@@ -219,13 +219,24 @@ def identify_and_inject_labels(binary_lines):
 
 
 if __name__ == "__main__":
-    with open("output.bin", "r") as f:
+
+    import sys
+
+    if len(sys.argv) != 3:
+        print("Usage: python dissembler.py input.bin output.asm")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+
+
+    with open(input_file, "r") as f:
         binary_lines = f.readlines()
 
     labeled_output = identify_and_inject_labels(binary_lines)
 
-    with open("output_disassembled.asm", "w") as f:
+    with open(output_file, "w") as f:
         for line in labeled_output:
             f.write(line + "\n")
 
-    print("Disassembled with labels output_dissambled.asm")
+    print("Disassembled with labels to", output_file)

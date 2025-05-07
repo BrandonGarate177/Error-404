@@ -1,7 +1,9 @@
 ADDI $r2, $r0, 1
 ADD $r1, $r2, $r0
-JUMP i <= 15_CHECK
+JUMP LOOP0
 LOOP0:
+FORK
+TRACE
 ADDI $r3, $r0, 3
 MOD $r4, $r1, $r3
 ADDI $r5, $r0, 0
@@ -29,6 +31,7 @@ ADDI $r6, $r0, 122
 PANIC $r6
 ADDI $r6, $r0, 122
 PANIC $r6
+IF_E3:
 ADDI $r6, $r0, 70
 PANIC $r6
 ADDI $r6, $r0, 105
@@ -37,6 +40,7 @@ ADDI $r6, $r0, 122
 PANIC $r6
 ADDI $r6, $r0, 122
 PANIC $r6
+IF_E3:
 ADDI $r6, $r0, 66
 PANIC $r6
 ADDI $r6, $r0, 117
@@ -45,4 +49,5 @@ ADDI $r6, $r0, 122
 PANIC $r6
 ADDI $r6, $r0, 122
 PANIC $r6
+BREAKPT
 IF_E3:
