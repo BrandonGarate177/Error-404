@@ -1,0 +1,28 @@
+ADDI $r2, $r0, 7
+ADD $r1, $r2, $r0
+TRACE
+ADDI $r3, $r0, 5
+BLT $r1, $r3, GE_END2
+JUMP IF_T0
+GE_END2:
+JUMP IF_E1
+IF_T0:
+ADDI $r6, $r0, 72
+PANIC $r6
+ADDI $r6, $r0, 105
+PANIC $r6
+ADDI $r6, $r0, 92
+PANIC $r6
+ADDI $r6, $r0, 110
+PANIC $r6
+IF_E1:
+ADDI $r6, $r0, 66
+PANIC $r6
+ADDI $r6, $r0, 121
+PANIC $r6
+ADDI $r6, $r0, 101
+PANIC $r6
+ADDI $r6, $r0, 92
+PANIC $r6
+ADDI $r6, $r0, 110
+PANIC $r6

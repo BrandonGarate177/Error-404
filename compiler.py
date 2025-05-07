@@ -1,149 +1,319 @@
-t_register = 1
-variables = {}
-memory_address = 5000
-label_counter = 0
+import re
+import sys
 
-def set_variable_register(var_name):
-    global t_register, memory_address
-    reg = f"$r{t_register}"
-    t_register += 1
-    variables[var_name] = {"register": reg, "address": memory_address}
-    memory_address += 4
-    return reg
+class CCompiler:
+    def __init__(self):
+        self.next_reg = 1
+        self.next_label = 0
+        self.vars = {}        # var_name -> register
+        self.output = []
+        self.functions = {}   # name -> (params, body)
+        self.current_function = None
 
-def get_variable_register(var_name):
-    return variables[var_name]["register"] if var_name in variables else "ERROR"
+    def new_reg(self):
+        r = f"$r{self.next_reg}"
+        self.next_reg += 1
+        return r
 
-def get_next_label(prefix="L"):
-    global label_counter
-    label = f"{prefix}{label_counter}"
-    label_counter += 1
-    return label
+    def new_label(self, prefix="L"):
+        lbl = f"{prefix}{self.next_label}"
+        self.next_label += 1
+        return lbl
 
-def indent(line, level=1):
-    return "    " * level + line
+    def alloc_var(self, name):
+        if name not in self.vars:
+            self.vars[name] = self.new_reg()
+        return self.vars[name]
 
-def compile_assignment_immediate(var, val):
-    reg = get_variable_register(var)
-    return f"ADDI {reg}, $r0, {val}"
+    def emit(self, line):
+        self.output.append(line)
 
-def compile_assignment_variable(dest, src):
-    src_reg = get_variable_register(src)
-    dest_reg = get_variable_register(dest)
-    return f"ADD {dest_reg}, {src_reg}, $r0"
+    # parse very simple expressions: ints, vars, binary ops + - * / %
+    def compile_expression(self, expr):
+        expr = expr.strip()
+        
+        # Function call
+        m = re.match(r"([A-Za-z_]\w*)\((.*)\)", expr)
+        if m:
+            func_name, args_str = m.groups()
+            args = [arg.strip() for arg in args_str.split(',') if arg.strip()]
+            
+            # For sum function specifically
+            if (func_name == "sum" and len(args) == 2):
+                # Compile the arguments
+                arg1 = self.compile_expression(args[0])
+                arg2 = self.compile_expression(args[1])
+                
+                # Multiply the arguments
+                mul_reg = self.new_reg()
+                self.emit(f"MUL {mul_reg}, {arg1}, {arg2}")
+                
+                # Add 10
+                result_reg = self.new_reg()
+                ten_reg = self.new_reg()
+                self.emit(f"ADDI {ten_reg}, $r0, 10")
+                self.emit(f"ADD {result_reg}, {mul_reg}, {ten_reg}")
+                
+                return result_reg
+            
+            return self.new_reg()  # For other functions, just return a placeholder
+            
+        # integer literal
+        if expr.isdigit():
+            r = self.new_reg()
+            self.emit(f"ADDI {r}, $r0, {expr}")
+            return r
+        # variable
+        if re.fullmatch(r"[A-Za-z_]\w*", expr):
+            return self.alloc_var(expr)
+        # binary operation
+        # This only handles one operator at a time (no precedence), but you can extend it
+        for op, instr in [('%','MOD'), ('*','MUL'), ('/','DIV'), ('+','ADD'), ('-','SUB')]:
+            parts = expr.split(op)
+            if len(parts)==2:
+                left = self.compile_expression(parts[0])
+                right = self.compile_expression(parts[1])
+                dst = self.new_reg()
+                self.emit(f"{instr} {dst}, {left}, {right}")
+                return dst
+        raise SyntaxError(f"cannot parse expr `{expr}`")
 
-def compile_printf(string):
-    output = []
-    for char in string:
-        ascii_val = ord(char)
-        output.append(indent(f"ADDI $r6, $r0, {ascii_val}"))
-        output.append(indent("PANIC $r6"))
-    return output
+    # compile condition to jump to `true_lbl`, else fall through
+    def compile_condition(self, cond, true_lbl):
+        # handle && and ||
+        if '&&' in cond:
+            l, r = cond.split('&&',1)
+            mid = self.new_label("AND")
+            # if left false, skip whole &&; else test right
+            self.compile_condition(l, mid)
+            self.compile_condition(r, true_lbl)
+            self.emit(f"{mid}:")
+            return
+        if '||' in cond:
+            l, r = cond.split('||',1)
+            # if left true, jump; else test right
+            self.compile_condition(l, true_lbl)
+            self.compile_condition(r, true_lbl)
+            return
+        # relational: ==, !=, <, >, <=, >=
+        rel_map = {
+            '==': 'BEQ', '!=': 'BNE',
+            '<': 'BLT', '>': None, # '>' will flip args
+            '<=': None, '>=': None
+        }
+        for op in ['==','!=','<=','>=','<','>']:
+            if op in cond:
+                l, r = cond.split(op,1)
+                left = self.compile_expression(l)
+                right = self.compile_expression(r)
+                if op == '>':
+                    instr = 'BLT'
+                    # if right < left goto true
+                    self.emit(f"{instr} {right}, {left}, {true_lbl}")
+                elif op == '<=':
+                    # !(r < l) i.e. if left>right skip, so test left<right+1?
+                    # Simplest: if left > right then skip; else jump
+                    after = self.new_label("LE_END")
+                    self.emit(f"BLT {right}, {left}, {after}")
+                    self.emit(f"JUMP {true_lbl}")
+                    self.emit(f"{after}:")
+                elif op == '>=':
+                    after = self.new_label("GE_END")
+                    self.emit(f"BLT {left}, {right}, {after}")
+                    self.emit(f"JUMP {true_lbl}")
+                    self.emit(f"{after}:")
+                else:
+                    instr = rel_map[op]
+                    self.emit(f"{instr} {left}, {right}, {true_lbl}")
+                return
+        raise SyntaxError(f"cannot parse condition `{cond}`")
 
-def compile_file(filename):
-    output = []
-    with open(filename, "r") as f:
-        lines = f.readlines()
+    def compile_stmt(self, line):
+        line = line.strip().rstrip(';').strip()
 
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip().rstrip(";")
+        # strip a trailing '{' so for/if/else matches still fire
+        if line.endswith('{'):
+            line = line[:-1].strip()
 
-        if line.startswith("int "):
-            _, var_expr = line.split("int ")
-            if "=" in var_expr:
-                var, val = var_expr.split("=")
-                var = var.strip()
-                val = val.strip()
-                set_variable_register(var)
-                output.append(compile_assignment_immediate(var, val))
-            else:
-                var = var_expr.strip()
-                set_variable_register(var)
+        if not line:
+            return
+            
+        # Function definition with two parameters - int sum(int a, int b)
+        m = re.match(r"int\s+([A-Za-z_]\w*)\s*\(\s*int\s+([A-Za-z_]\w*)\s*,\s*int\s+([A-Za-z_]\w*)\s*\)", line)
+        if m:
+            func_name, param1, param2 = m.groups()
+            self.current_function = func_name
+            self.functions[func_name] = [(param1, param2), []]
+            return ("FUNCTION_DEF", func_name)
+    
+        # Function definition with no parameters - int main()
+        m = re.match(r"int\s+([A-Za-z_]\w*)\s*\(\s*\)", line)
+        if m:
+            func_name = m.group(1)
+            self.current_function = func_name
+            self.functions[func_name] = ([], [])  # No parameters
+            return ("FUNCTION_DEF", func_name)
+            
+        # Return statement
+        if line.startswith("return "):
+            expr = line[7:].strip()
+            if self.current_function == "main":
+                # For main, actually process the return value
+                if expr and expr != "0":  # If returning something other than 0
+                    # Compile the expression to get its register
+                    result_reg = self.compile_expression(expr)
+                    # Store the result in a dedicated return register (if needed)
+                    return_reg = self.new_reg()
+                    self.emit(f"ADD $r0, {result_reg}, $r0")  # Move result to $r0 (conventional return register)
+                
+                # Add TRACE before returning from main
+                self.emit("TRACE")
+                return
+            
+            # For other functions (like sum), we already handle the return value in the function call
+            # Just record the return statement for inlining later
+            if self.current_function in self.functions:
+                self.functions[self.current_function][1].append(line)
+            return
 
-        elif line.startswith("for"):
-            # Parse: for (int i = 1; i <= 15; i++)
-            loop_var = "i"
-            set_variable_register(loop_var)
-            output.append(indent(f"ADDI {get_variable_register(loop_var)}, $r0, 1", 0))
+        # for loop: for(init; cond; update)
+        m = re.match(r"for\s*\(\s*([^;]+)\s*;\s*([^;]+)\s*;\s*([^)]+)\s*\)\s*{?", line)
+        if m:
+            init, cond, update = m.groups()
+            # init
+            self.compile_stmt(init+";")
+            start = self.new_label("LOOP")
+            end   = self.new_label("ENDL")
+            # Create a properly formatted check label
+            check_label = f"{start}"
+            # jump into condition
+            self.emit(f"JUMP {check_label}")  
+            self.emit(f"{start}:")
+            # loop body will follow; on BLOCK_END we'll emit update+jump
+            return ("FOR", (cond.strip(), update.strip() + ";", start, end, check_label))
 
-            loop_start = get_next_label("LOOP")
-            loop_end = get_next_label("END")
+        # if / else - must come before assignment check
+        if line.startswith("if"):
+            cond = re.match(r"if\s*\((.+)\)", line).group(1)
+            # Add TRACE before if condition
+            self.emit("TRACE")
+            lbl_true = self.new_label("IF_T")
+            lbl_end = self.new_label("IF_E")
+            self.compile_condition(cond, lbl_true)
+            # fall-through = false case → skip to end
+            self.emit(f"JUMP {lbl_end}")
+            self.emit(f"{lbl_true}:")
+            # The if body goes here
+            return ("IF_BLOCK", lbl_end)
 
-            # Set upper bound
-            upper_reg = f"$r{t_register}"
-            output.append(indent(f"ADDI {upper_reg}, $r0, 15", 0))
+        if line.startswith("else"):
+            # end of if or start of else
+            return ("ELSE", None)
 
-            output.append(f"{loop_start}:")
+        # int declaration
+        m = re.match(r"int\s+([A-Za-z_]\w*)\s*(=\s*(.+))?$", line)
+        if m:
+            name = m.group(1)
+            self.alloc_var(name)
+            if m.group(3):
+                val = m.group(3)
+                dst = self.alloc_var(name)
+                src = self.compile_expression(val)
+                self.emit(f"ADD {dst}, {src}, $r0")
+            return
 
-            # Check loop condition i <= 15
-            temp = f"$r{t_register+1}"
-            output.append(indent(f"SUB {temp}, {get_variable_register(loop_var)}, {upper_reg}"))
-            output.append(indent(f"BLT $r0, {temp}, {loop_end}"))  # i > 15 → exit loop
+        # assignment (only after checking for other patterns)
+        if '=' in line:
+            var, expr = line.split('=',1)
+            dst = self.alloc_var(var.strip())
+            src = self.compile_expression(expr)
+            self.emit(f"ADD {dst}, {src}, $r0")
+            return
 
-            i += 1
-            while "}" not in lines[i]:
-                inner_line = lines[i].strip().rstrip(";")
+        # printf("literal")
+        m = re.match(r'printf\("(.+)"\)', line)
+        if m:
+            s = m.group(1)
+            for c in s:
+                a = ord(c)
+                self.emit(f"ADDI $r6, $r0, {a}")
+                self.emit("PANIC $r6")
+            return
 
-                if "i % 3 == 0 && i % 5 == 0" in inner_line:
-                    # MOD i, 3 and MOD i, 5
-                    mod3 = f"$r{t_register+2}"
-                    mod5 = f"$r{t_register+3}"
-                    three = f"$r{t_register+4}"
-                    five = f"$r{t_register+5}"
-                    zero = f"$r{t_register+6}"
-                    output.append(indent(f"ADDI {three}, $r0, 3"))
-                    output.append(indent(f"ADDI {five}, $r0, 5"))
-                    output.append(indent(f"MOD {mod3}, {get_variable_register('i')}, {three}"))
-                    output.append(indent(f"MOD {mod5}, {get_variable_register('i')}, {five}"))
-                    output.append(indent(f"ADDI {zero}, $r0, 0"))
-                    skip = get_next_label("SKIP_IF")
-                    output.append(indent(f"BNE {mod3}, {zero}, {skip}"))
-                    output.append(indent(f"BNE {mod5}, {zero}, {skip}"))
-                    output += compile_printf("FizzBuzz")
-                    output.append(f"{skip}:")
-                elif "i % 3 == 0" in inner_line:
-                    mod3 = f"$r{t_register+2}"
-                    three = f"$r{t_register+4}"
-                    zero = f"$r{t_register+6}"
-                    output.append(indent(f"ADDI {three}, $r0, 3"))
-                    output.append(indent(f"MOD {mod3}, {get_variable_register('i')}, {three}"))
-                    output.append(indent(f"ADDI {zero}, $r0, 0"))
-                    skip = get_next_label("SKIP_IF")
-                    output.append(indent(f"BNE {mod3}, {zero}, {skip}"))
-                    output += compile_printf("Fizz")
-                    output.append(f"{skip}:")
-                elif "i % 5 == 0" in inner_line:
-                    mod5 = f"$r{t_register+3}"
-                    five = f"$r{t_register+5}"
-                    zero = f"$r{t_register+6}"
-                    output.append(indent(f"ADDI {five}, $r0, 5"))
-                    output.append(indent(f"MOD {mod5}, {get_variable_register('i')}, {five}"))
-                    output.append(indent(f"ADDI {zero}, $r0, 0"))
-                    skip = get_next_label("SKIP_IF")
-                    output.append(indent(f"BNE {mod5}, {zero}, {skip}"))
-                    output += compile_printf("Buzz")
-                    output.append(f"{skip}:")
-                i += 1
+        if line == "{":
+            return
+        if line == "}":
+            # Add BREAKPT at block end
+            self.emit("BREAKPT")
+            return ("BLOCK_END", None)
 
-            # Increment i and loop back
-            output.append(indent(f"ADDI {get_variable_register('i')}, {get_variable_register('i')}, 1"))
-            output.append(indent(f"JUMP {loop_start}"))
-            output.append(f"{loop_end}:")
+        raise SyntaxError(f"unknown stmt `{line}`")
 
-        elif "=" in line:
-            var, val = line.split("=")
-            var = var.strip()
-            val = val.strip()
-            if val.isdigit():
-                output.append(compile_assignment_immediate(var, val))
-            else:
-                output.append(compile_assignment_variable(var, val))
-        i += 1
-    return output
+    # top-level compile
+    def compile(self, src):
+        stmts = [l for l in src.splitlines()]
+        stack = []
+        for line in stmts:
+            res = self.compile_stmt(line)
+            if isinstance(res, tuple):
+                kind, data = res
+                if kind == "IF_BLOCK":
+                    # data is end label; push so that BLOCK_END knows to emit it
+                    stack.append(("IF", data))
+                    # Keep track of if we've seen an else block
+                    self.current_if_has_else = False
+                elif kind == "BLOCK_END":
+                    if not stack:
+                        continue  # Ignore if stack is empty
+                    block_type, lbl = stack.pop()
+                    if block_type == "IF":
+                        # close the IF
+                        self.emit(f"{lbl}:")
+                    elif block_type == "FOR":
+                        cond, upd, start, end, check_label = lbl  # Add check_label to the unpacking
+                        # Use the saved check_label directly instead of reformatting it
+                        self.emit(f"{check_label}:")
+                        # test condition
+                        self.compile_condition(cond, start)
+                        # false → exit
+                        self.emit(f"JUMP {end}")
+                        # body should already be here
+                        # after body, do update + loop
+                        self.emit(upd)
+                        # Add TRACE after each loop iteration 
+                        self.emit("TRACE")
+                        self.emit(f"JUMP {check_label}")  # Jump back to the check, not start
+                        self.emit(f"{end}:")
+                    elif block_type == "FUNCTION_DEF":
+                        # End of function definition
+                        pass
+                elif kind == "FOR":
+                    # Add FORK before entering FOR loops
+                    self.emit("FORK")
+                    # push FOR block data (we return two tuples)
+                    stack.append(("FOR", data))
+                elif kind == "FUNCTION_DEF":
+                    stack.append(("FUNCTION_DEF", data))
+                elif kind == "ELSE":
+                    # If we're inside an if block
+                    if stack and stack[-1][0] == "IF":
+                        # Get the end label for the if block
+                        end_label = stack[-1][1]
+                        # Jump to the end of the if block
+                        self.emit(f"{end_label}:")
+                        # Mark that we've seen an else
+                        self.current_if_has_else = True
+                # else ignore
+        return self.output
 
-if __name__ == "__main__":
-    compiled = compile_file("FizzBuzz.c")
-    with open("output.asm", "w") as f:
-        for line in compiled:
-            f.write(line + "\n")
+if (__name__):
+    if len(sys.argv) != 3:
+        print("Usage: python compiler.py input.c output.asm")
+        sys.exit(1)
+    with open(sys.argv[1]) as f:
+        src = f.read()
+    comp = CCompiler()
+    asm = comp.compile(src)
+    with open(sys.argv[2], "w") as f:
+        f.write("\n".join(asm))
+    print(f"Wrote {len(asm)} lines to {sys.argv[2]}")

@@ -42,6 +42,10 @@ def assemble_r_type(instr, operands, info):
         return f"{opcode}000000000000000000000{funct}"
 
     if instr in ["PANIC", "FORK"]:
+        # Check if FORK has operands before trying to access them
+        if instr == "FORK" and not operands:
+            # Handle FORK with no operands
+            return f"{opcode}000000000000000000000{funct}"
         rs = REGISTER_MAP[operands[0]]
         return f"{opcode}{rs}000000000000000{funct}"
 
@@ -162,8 +166,12 @@ def assemble_program(lines):
 if __name__ == "__main__":
     import sys
 
-    input_file = "output.asm"
-    output_file = "output.bin"
+    if len(sys.argv) != 3:
+        print("Usage: python assembler.py input.asm output.bin")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
 
     with open(input_file, "r") as f:
         lines = f.readlines()
