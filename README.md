@@ -46,3 +46,7 @@ python assembler.py output.asm > output.bin
 # Disassemble machine code back to ASM
 python disassembler.py output.bin > output_disassembled.asm
 ```
+
+### Contributors: 
+- Brandon Garate 
+- Cristian Olea Pacheco
