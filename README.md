@@ -27,4 +27,22 @@ The custom compiler that:
 - Outputs Error-404 ASM instructions
 - Output is saved as a .asm file, simulating what would be passed to the assembler.
 
+#### 4. Assembler.py 
+- Reads .asm files and converts each instruction into its corresponding 32-bit binary format based on the INSTRUCTIONS map
+- Output is a .bin file with 1 line per machine instruction.
 
+#### 5. Dissasembler.py
+- Takes the .bin machine code and reconstructs the original Error-404 ASM.
+
+
+## HOW TO RUN: 
+``` python
+# Compile C to Error-404 ASM
+python compiler.py C_programs/fizzbuzz.c > output.asm
+
+# Assemble Error-404 ASM to machine code
+python assembler.py output.asm > output.bin
+
+# Disassemble machine code back to ASM
+python disassembler.py output.bin > output_disassembled.asm
+```
