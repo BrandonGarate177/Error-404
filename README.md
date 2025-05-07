@@ -6,8 +6,10 @@
 - Create a Dissasembler, Machine Code -> ERROR-404 ASM
 
 ### Instruction Sheet for ERROR 404 ASM: 
-[Error_404_Instruction_Sheet.pdf](https://github.com/user-attachments/files/20092624/Error_404_Instruction_Sheet.pdf)
+[Error_404_Instruction_Sheet.pdf](https://github.com/user-attachments/files/20093991/Error_404_Instruction_Sheet.2.pdf)
 
+
+## All of our test runs, and example C programs have been saved in designated seperate folder. (ie pipiline folders)
 
 ## Error 404 Pipeline: 
 #### 1. C code snippets: 
@@ -19,4 +21,10 @@ The outer dictionary, INSTRUCTIONS, contains keys for each of our custom instruc
 - EX;  "404":     {"type": "I", "opcode": "010001"}
 
 #### 3. Compiler.py
-- This compiler takes in 
+The custom compiler that:
+- Parses basic C constructs (e.g., for, if, mod)
+- Allocates virtual registers
+- Outputs Error-404 ASM instructions
+- Output is saved as a .asm file, simulating what would be passed to the assembler.
+
+
