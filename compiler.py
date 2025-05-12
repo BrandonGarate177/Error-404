@@ -5,9 +5,9 @@ class CCompiler:
     def __init__(self):
         self.next_reg = 1
         self.next_label = 0
-        self.vars = {}        # var_name -> register
+        self.vars = {}        
         self.output = []
-        self.functions = {}   # name -> (params, body)
+        self.functions = {}   
         self.current_function = None
 
     def new_reg(self):
@@ -98,7 +98,7 @@ class CCompiler:
         # relational: ==, !=, <, >, <=, >=
         rel_map = {
             '==': 'BEQ', '!=': 'BNE',
-            '<': 'BLT', '>': None, # '>' will flip args
+            '<': 'BLT', '>': None, 
             '<=': None, '>=': None
         }
         for op in ['==','!=','<=','>=','<','>']:
@@ -111,8 +111,6 @@ class CCompiler:
                     # if right < left goto true
                     self.emit(f"{instr} {right}, {left}, {true_lbl}")
                 elif op == '<=':
-                    # !(r < l) i.e. if left>right skip, so test left<right+1?
-                    # Simplest: if left > right then skip; else jump
                     after = self.new_label("LE_END")
                     self.emit(f"BLT {right}, {left}, {after}")
                     self.emit(f"JUMP {true_lbl}")
@@ -129,6 +127,8 @@ class CCompiler:
         raise SyntaxError(f"cannot parse condition `{cond}`")
 
     def compile_stmt(self, line):
+
+        
         line = line.strip().rstrip(';').strip()
 
         # strip a trailing '{' so for/if/else matches still fire
@@ -138,8 +138,9 @@ class CCompiler:
         if not line:
             return
             
+
         # Function definition with two parameters - int sum(int a, int b)
-        m = re.match(r"int\s+([A-Za-z_]\w*)\s*\(\s*int\s+([A-Za-z_]\w*)\s*,\s*int\s+([A-Za-z_]\w*)\s*\)", line)
+        m = re.match(r"int\s+([A-Za-z_]\w*)\s*\(\s*int\s+([A-Za-z_]\w*)\s*,\s*int\s+([A-Za-z_]\w*)\s*\)", line)# bro 
         if m:
             func_name, param1, param2 = m.groups()
             self.current_function = func_name
@@ -153,30 +154,31 @@ class CCompiler:
             self.current_function = func_name
             self.functions[func_name] = ([], [])  # No parameters
             return ("FUNCTION_DEF", func_name)
+        
+
             
         # Return statement
+
         if line.startswith("return "):
             expr = line[7:].strip()
             if self.current_function == "main":
-                # For main, actually process the return value
                 if expr and expr != "0":  # If returning something other than 0
                     # Compile the expression to get its register
                     result_reg = self.compile_expression(expr)
-                    # Store the result in a dedicated return register (if needed)
                     return_reg = self.new_reg()
-                    self.emit(f"ADD $r0, {result_reg}, $r0")  # Move result to $r0 (conventional return register)
+                    self.emit(f"ADD $r0, {result_reg}, $r0") 
                 
-                # Add TRACE before returning from main
                 self.emit("TRACE")
                 return
             
-            # For other functions (like sum), we already handle the return value in the function call
-            # Just record the return statement for inlining later
+
             if self.current_function in self.functions:
                 self.functions[self.current_function][1].append(line)
             return
 
-        # for loop: for(init; cond; update)
+
+
+        # for loop: for 
         m = re.match(r"for\s*\(\s*([^;]+)\s*;\s*([^;]+)\s*;\s*([^)]+)\s*\)\s*{?", line)
         if m:
             init, cond, update = m.groups()
@@ -184,15 +186,13 @@ class CCompiler:
             self.compile_stmt(init+";")
             start = self.new_label("LOOP")
             end   = self.new_label("ENDL")
-            # Create a properly formatted check label
             check_label = f"{start}"
             # jump into condition
             self.emit(f"JUMP {check_label}")  
             self.emit(f"{start}:")
-            # loop body will follow; on BLOCK_END we'll emit update+jump
             return ("FOR", (cond.strip(), update.strip() + ";", start, end, check_label))
 
-        # if / else - must come before assignment check
+        # if or else must come before conditionals
         if line.startswith("if"):
             cond = re.match(r"if\s*\((.+)\)", line).group(1)
             # Add TRACE before if condition
@@ -200,10 +200,9 @@ class CCompiler:
             lbl_true = self.new_label("IF_T")
             lbl_end = self.new_label("IF_E")
             self.compile_condition(cond, lbl_true)
-            # fall-through = false case → skip to end
             self.emit(f"JUMP {lbl_end}")
             self.emit(f"{lbl_true}:")
-            # The if body goes here
+            # if body goes here
             return ("IF_BLOCK", lbl_end)
 
         if line.startswith("else"):
@@ -270,17 +269,14 @@ class CCompiler:
                         # close the IF
                         self.emit(f"{lbl}:")
                     elif block_type == "FOR":
-                        cond, upd, start, end, check_label = lbl  # Add check_label to the unpacking
-                        # Use the saved check_label directly instead of reformatting it
+                        cond, upd, start, end, check_label = lbl 
                         self.emit(f"{check_label}:")
                         # test condition
                         self.compile_condition(cond, start)
                         # false → exit
                         self.emit(f"JUMP {end}")
-                        # body should already be here
-                        # after body, do update + loop
+                       
                         self.emit(upd)
-                        # Add TRACE after each loop iteration 
                         self.emit("TRACE")
                         self.emit(f"JUMP {check_label}")  # Jump back to the check, not start
                         self.emit(f"{end}:")
@@ -305,6 +301,9 @@ class CCompiler:
                         self.current_if_has_else = True
                 # else ignore
         return self.output
+
+
+
 
 if (__name__):
     if len(sys.argv) != 3:
